@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/Gitlab-project-cloner.iml" filepath="$PROJECT_DIR$/Gitlab-project-cloner.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../Programs/go1.15.8/go1.15.8.iml" filepath="$PROJECT_DIR$/../Programs/go1.15.8/go1.15.8.iml" />
     </modules>
   </component>
 </project>

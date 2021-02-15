@@ -1,0 +1,5 @@
+application:
+  url: https://gitlab.lab.nbttech.com/api/v3/
+  token: <enter private token>
+  grpUrl: groups/itim
+  destDir: itim

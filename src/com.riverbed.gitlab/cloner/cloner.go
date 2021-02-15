@@ -1,100 +1,105 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
 	"time"
-
-	"gopkg.in/yaml.v2"
 )
 
+type YamlConfig struct {
+	Application struct {
+		Url    string `yaml:"url"`
+		Token  string `yaml:"token"`
+		GrpUrl string `yaml:"grpUrl"`
+		Dest   string `yaml:"destDir"`
+	}
+}
+
 type GroupResponse struct {
-	projects []Project `json:"projects,omitempty"`
+	Projects []Project `json:"projects,omitempty"`
 }
 
 type Project struct {
-	id              int `json:"id,omitempty"`
-	description     string `json:"description,omitempty"`
-	ssh_url_to_repo string `json:"ssh_url_to_repo,omitempty"`
+	Id              int    `json:"id,omitempty"`
+	Description     string `json:"description,omitempty"`
+	Ssh_url_to_repo string `json:"ssh_url_to_repo,omitempty"`
 }
 
-type Application struct {
-	url		string `yaml:"url"`
-	token 	string `yaml:"private-token"`
-}
-
-func (c *Application) getConf() *Application {
-
-	yamlFile, err := ioutil.ReadFile("application.yaml")
-	if err != nil {
-		log.Printf("yamlFile.Get err   #%v ", err)
-	}
-	err = yaml.Unmarshal(yamlFile, c)
-	if err != nil {
-		log.Fatalf("Unmarshal: %v", err)
-	}
-
-	return c
-}
-
+// Func main should be as small as possible and do as little as possible by convention
 func main() {
-	var c Application
-	c.getConf()
+	// Generate our config based on the config supplied
+	// by the user in the flags
 
-	fmt.Println(c)
-	connect()
-}
+	var yamlFile = "resources/application.yml"
+	yamlConfig := readYaml(yamlFile)
+	var Projects []Project = getProjects(&yamlConfig)
+	destDir := yamlConfig.Application.Dest;
 
-func connect() {
-
-	groupResponse := GroupResponse{}
-
-	url := "https://gitlab.lab.nbttech.com/api/v3/groups/itim";
-
-	// make a sample HTTP GET request
-	req, err := http.NewRequest("GET", url, bytes.NewBufferString(""))
-	req.Header.Add("PRIVATE-TOKEN", "Rz3t3ULb8bd6Hezxdaut")
-
-	timeout := time.Duration(5 * time.Second)
-	client := http.Client{
-		Timeout: timeout,
+	if _, err := os.Stat(destDir); os.IsNotExist(err) {
+		os.Mkdir(destDir, os.ModeDir)
+		os.Chdir(destDir)
 	}
 
-	res, err := client.Do(req)
+	for _, p := range Projects {
+		cmd := exec.Command("git", "clone", p.Ssh_url_to_repo);
+		cmd.Run()
+		cmd.Wait()
+	}
 
-	// check for response error
+}
+
+func readYaml(yamlFile string) YamlConfig {
+	yamlConfig := YamlConfig{}
+	yamlData, err := ioutil.ReadFile(yamlFile)
+
+	err = yaml.Unmarshal([]byte(yamlData), &yamlConfig)
+	if err != nil {
+		log.Fatalf("error: %v", err)
+	}
+
+	return yamlConfig;
+
+}
+
+func getProjects(config *YamlConfig) []Project {
+
+	url := config.Application.Url + config.Application.GrpUrl
+
+	httpClient := http.Client{
+		Timeout: time.Second * 2, // Timeout after 2 seconds
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// read all response body
-	data, _ := ioutil.ReadAll(res.Body)
-
-	reader := bytes.NewReader(data)
-	decoder := json.NewDecoder(reader)
-
-	err = decoder.Decode(data)
-
+	req.Header.Add("PRIVATE-TOKEN", config.Application.Token)
+	resp, err := httpClient.Do(req)
 	if err != nil {
-		fmt.Println("whoops:", err)
+		log.Fatalln(err)
 	}
 
-	var projects interface{} = groupResponse.projects
+	//We Read the response body on the line below.
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-	fmt.Println("Printing the projects")
-	fmt.Println(projects)
-	//for _, p := range projects {
-	//	fmt.Println(p.ssh_url_to_repo)
-	//}
+	groupResponse := GroupResponse{}
+	jsonErr := json.Unmarshal(body, &groupResponse)
+	if jsonErr != nil {
+		log.Fatal(jsonErr)
+	}
 
 	// close response body
-	res.Body.Close()
+	resp.Body.Close()
 
-	// print `data` as a string
-	fmt.Printf("%s\n", data)
+	return groupResponse.Projects;
 
 }
